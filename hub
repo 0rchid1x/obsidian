@@ -1,0 +1,294 @@
+--// MyHub - Obsidian Script Hub Base
+
+local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
+
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+
+--// Window
+
+local Window = Library:CreateWindow({
+    Title = "private hub",
+    Footer = "v1.0",
+    Icon = nil,
+    NotifySide = "Right",
+    ShowCustomCursor = true,
+})
+
+
+--// Tabs
+
+local Tabs = {
+    Home = Window:AddTab("Home", "home"),
+    Universal = Window:AddTab("Universal", "globe"),
+    Games = Window:AddTab("Games", "gamepad"),
+    Settings = Window:AddTab("Settings", "settings"),
+}
+
+
+--// Script System
+
+local Scripts = {
+
+    Universal = {
+
+        {
+            Name = "Infinite Yield",
+            Description = "Admin command script",
+
+            Load = function()
+                loadstring(game:HttpGet(
+                    "https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"
+                ))()
+            end
+        },
+
+
+        {
+            Name = "Obsidian Universal",
+            Description = "Universal aimbot/esp",
+
+            Load = function()
+                loadstring(game:HttpGet(
+                    "https://raw.githubusercontent.com/0rchid1x/obsidian/refs/heads/main/main"
+                ))()
+            end
+        },
+
+    },
+
+
+    Games = {
+
+        [122446657157717] = { -- Sniper Arena
+
+            {
+                Name = "sniper arena script",
+                Description = "skin changer /w esp",
+
+                Load = function()
+                loadstring(game:HttpGet(
+                    "https://rscripts.net/raw/skin-changer-open-source_1781915664324_pDi68Fs444.txt"
+                ))()
+            end
+            }
+
+        },
+
+
+        [301549746] = { -- counterblox
+
+            {
+                Name = "counterblox script",
+                Description = "skinchanger",
+
+               Load = function()
+                loadstring(game:HttpGet(
+                    "https://raw.githubusercontent.com/MMoonDzn/AuroraChanger/refs/heads/main/loader.lua"
+                ))()
+            end
+            }
+
+        }
+
+    }
+
+}
+
+
+
+--// Home
+
+local HomeBox = Tabs.Home:AddLeftGroupbox("Information")
+
+HomeBox:AddLabel("private")
+HomeBox:AddLabel("early access")
+HomeBox:AddLabel("current game: "..game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name)
+
+
+--// Loader Function
+
+local function AddScript(group, script)
+
+    group:AddButton({
+
+        Text = script.Name,
+
+        Tooltip = script.Description,
+
+        Func = function()
+
+            Library:Notify({
+                Title = "Loading",
+                Description = script.Name,
+                Time = 3
+            })
+
+
+            task.spawn(function()
+
+                local success, err = pcall(script.Load)
+
+                if success then
+
+                    Library:Notify({
+                        Title = "Loaded",
+                        Description = script.Name,
+                        Time = 3
+                    })
+
+                else
+
+                    Library:Notify({
+                        Title = "Error",
+                        Description = tostring(err),
+                        Time = 5
+                    })
+
+                end
+
+            end)
+
+        end
+
+    })
+
+end
+
+
+
+--// Universal Scripts
+
+local UniversalBox =
+Tabs.Universal:AddLeftGroupbox("Scripts")
+
+
+for _,script in pairs(Scripts.Universal) do
+
+    AddScript(UniversalBox, script)
+
+end
+
+
+
+--// Game Scripts
+
+local GameBox =
+Tabs.Games:AddLeftGroupbox("Current Game")
+
+
+local CurrentGame = Scripts.Games[game.PlaceId]
+
+
+if CurrentGame then
+
+    for _,script in pairs(CurrentGame) do
+
+        AddScript(GameBox, script)
+
+    end
+
+
+else
+
+    GameBox:AddLabel("this game is not supported")
+
+end
+
+
+
+--// Settings
+
+local MenuBox =
+Tabs.Settings:AddLeftGroupbox("Menu")
+
+
+MenuBox:AddToggle("OpenKeybinds", {
+
+    Text = "Keybind Menu",
+
+    Default = Library.KeybindFrame.Visible,
+
+    Callback = function(v)
+
+        Library.KeybindFrame.Visible = v
+
+    end
+
+})
+
+
+MenuBox:AddToggle("Cursor", {
+
+    Text = "Custom Cursor",
+
+    Default = true,
+
+    Callback = function(v)
+
+        Library.ShowCustomCursor = v
+
+    end
+
+})
+
+
+MenuBox:AddButton({
+
+    Text = "Unload",
+
+    Func = function()
+
+        Library:Unload()
+
+    end
+
+})
+
+
+
+MenuBox:AddLabel("Menu Key")
+:AddKeyPicker("MenuKey", {
+
+    Default = "RightShift",
+
+    NoUI = true,
+
+    Text = "Menu Key"
+
+})
+
+
+Library.ToggleKeybind = Options.MenuKey
+
+
+
+--// Configs
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+
+SaveManager:IgnoreThemeSettings()
+
+SaveManager:SetIgnoreIndexes({
+    "MenuKey"
+})
+
+
+ThemeManager:SetFolder("MyHub")
+SaveManager:SetFolder("MyHub/configs")
+
+
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+ThemeManager:ApplyToTab(Tabs.Settings)
+
+SaveManager:LoadAutoloadConfig()
+
+
+print("MyHub loaded")
