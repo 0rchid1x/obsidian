@@ -1,0 +1,503 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- --- CONFIGURATION / STATE ---
+local Settings = {
+    AimbotEnabled = true,
+    TargetMethod = "DynamicScan", 
+    CustomTargetName = "Head",    
+    FOV = 150,
+    TeamCheck = false,
+    VisibleCheck = true,
+    
+    -- Core Integrations
+    Smoothing = 1,
+    TriggerbotEnabled = false,
+    
+    -- Visual Customization
+    ESPEnabled = true,
+    ShowBoxes = true,
+    ShowNames = true,
+    ShowTracers = false,
+    ShowHealth = true,
+    ShowSkeleton = false,
+    ShowFOV = false,
+    ShowCrosshair = false,
+    
+    -- Dynamic Theme State Color Palettes
+    BoxColor = Color3.fromRGB(10, 132, 255),
+    SkeletonColor = Color3.fromRGB(255, 255, 255),
+    FOVColor = Color3.fromRGB(255, 255, 255),
+    CrosshairColor = Color3.fromRGB(255, 0, 0) 
+}
+
+local Aiming = false
+local TriggerbotHolding = false
+local ActiveConnections = {}
+local esps = {}
+
+local R15Links = {
+    {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
+    {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"}
+}
+local R6Links = {
+    {"Head", "Torso"},
+    {"Torso", "Left Arm"}, {"Torso", "Right Arm"},
+    {"Torso", "Left Leg"}, {"Torso", "Right Leg"}
+}
+
+-- --- INITIALIZE OBSIDIAN / LINORIA UI ---
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua", true))()
+local Window = Library:CreateWindow({
+    Title = "OBSIDIAN",
+    Footer = "V2.0.0",
+    AutoShow = true,
+    ToggleKeybind = Enum.KeyCode.RightShift,
+})
+
+-- --- TAB 1: TARGETING ENGINE ---
+local TargetingTab = Window:AddTab("Targeting", "crosshair")
+local AimCoreSection = TargetingTab:AddLeftGroupbox("Core Controls")
+local TriggerbotSection = TargetingTab:AddRightGroupbox("Triggerbot Engine")
+
+AimCoreSection:AddToggle("TrackingLockToggle", {
+    Text = "Enable Tracking Lock",
+    Default = Settings.AimbotEnabled,
+    Callback = function(state) Settings.AimbotEnabled = state end
+})
+
+AimCoreSection:AddToggle("TeamFilterToggle", {
+    Text = "Team Filter Check",
+    Default = Settings.TeamCheck,
+    Callback = function(state) Settings.TeamCheck = state end
+})
+
+AimCoreSection:AddToggle("VisCheckToggle", {
+    Text = "Visibility Check",
+    Default = Settings.VisibleCheck,
+    Callback = function(state) Settings.VisibleCheck = state end
+})
+
+AimCoreSection:AddSlider("TrackingFOVSlider", {
+    Text = "Tracking FOV",
+    Min = 30, Max = 500, Default = Settings.FOV, Rounding = 0,
+    Callback = function(v) Settings.FOV = v end
+})
+
+AimCoreSection:AddSlider("AimSmoothingSlider", {
+    Text = "Aim Smoothing",
+    Min = 1, Max = 15, Default = Settings.Smoothing, Rounding = 1,
+    Callback = function(v) Settings.Smoothing = v end
+})
+
+TriggerbotSection:AddToggle("TriggerbotMasterToggle", {
+    Text = "Enable Triggerbot",
+    Default = Settings.TriggerbotEnabled,
+    Callback = function(state) Settings.TriggerbotEnabled = state end
+})
+
+TriggerbotSection:AddLabel("Activation: Hold Right Click")
+
+-- --- TAB 2: OVERLAYS (ESP) ---
+local OverlaysTab = Window:AddTab("Overlays", "eye")
+local RenderSection = OverlaysTab:AddLeftGroupbox("Master Engine")
+local BoxSkelSection = OverlaysTab:AddLeftGroupbox("Geometry & Skeletons")
+local InfoSection = OverlaysTab:AddRightGroupbox("Text & Indicators")
+local HUDSection = OverlaysTab:AddRightGroupbox("Screen HUD")
+
+RenderSection:AddToggle("RenderOverlaysToggle", {
+    Text = "Render Visual Overlays", Default = Settings.ESPEnabled,
+    Callback = function(v) Settings.ESPEnabled = v end
+})
+
+BoxSkelSection:AddToggle("DrawBoxesToggle", {
+    Text = "Draw Box Borders", Default = Settings.ShowBoxes,
+    Callback = function(v) Settings.ShowBoxes = v end
+}):AddColorPicker("BoxOverlayColorPicker", {
+    Default = Settings.BoxColor,
+    Callback = function(newColor) Settings.BoxColor = newColor end
+})
+
+BoxSkelSection:AddToggle("DrawSkeletonToggle", {
+    Text = "Draw Skeletons", Default = Settings.ShowSkeleton,
+    Callback = function(v) Settings.ShowSkeleton = v end
+}):AddColorPicker("SkeletonColorPicker", {
+    Default = Settings.SkeletonColor,
+    Callback = function(newColor) Settings.SkeletonColor = newColor end
+})
+
+InfoSection:AddToggle("RenderIdentityToggle", {
+    Text = "Identity Tags", Default = Settings.ShowNames,
+    Callback = function(v) Settings.ShowNames = v end
+})
+
+InfoSection:AddToggle("ShowHealthToggle", {
+    Text = "Health Bars", Default = Settings.ShowHealth,
+    Callback = function(v) Settings.ShowHealth = v end
+})
+
+HUDSection:AddToggle("ProjectTracersToggle", {
+    Text = "Project Screen Tracers", Default = Settings.ShowTracers,
+    Callback = function(v) Settings.ShowTracers = v end
+})
+
+HUDSection:AddToggle("DisplayFOVToggle", {
+    Text = "FOV Circle", Default = Settings.ShowFOV,
+    Callback = function(v) Settings.ShowFOV = v end
+}):AddColorPicker("FOVCircleColorPicker", {
+    Default = Settings.FOVColor,
+    Callback = function(newColor) Settings.FOVColor = newColor end
+})
+
+HUDSection:AddToggle("DisplayCrosshairToggle", {
+    Text = "Crosshair", Default = Settings.ShowCrosshair,
+    Callback = function(v) Settings.ShowCrosshair = v end
+}):AddColorPicker("CrosshairColorPicker", {
+    Default = Settings.CrosshairColor,
+    Callback = function(newColor) Settings.CrosshairColor = newColor end
+})
+
+
+-- --- TAB 3: CONTROL UTILITIES & SYSTEM ---
+local SystemTab = Window:AddTab("System", "settings")
+local MemorySection = SystemTab:AddLeftGroupbox("Memory Cleaners")
+
+Library:SetWatermarkVisibility(false)
+Library:SetWatermark("Universal Testing Tool | Active")
+
+-- --- CROSSHAIR DRAWING GENERATION ---
+local CrosshairLines = {
+    Top = Drawing.new("Line"), Bottom = Drawing.new("Line"),
+    Left = Drawing.new("Line"), Right = Drawing.new("Line")
+}
+
+for _, line in pairs(CrosshairLines) do
+    line.Thickness = 1.5; line.Color = Settings.CrosshairColor; line.Transparency = 1; line.Visible = false
+end
+
+MemorySection:AddButton({
+    Text = "Unload Toolkit Module", DoubleClick = false,
+    Func = function() Library:Unload() end
+})
+
+Library:OnUnload(function()
+    for _, connection in ipairs(ActiveConnections) do
+        if connection then connection:Disconnect() end
+    end
+    if FOVCircle then FOVCircle:Remove() end
+    for _, line in pairs(CrosshairLines) do
+        if line then line:Remove() end
+    end
+    for player, _ in pairs(esps) do
+        if esps[player] then
+            esps[player].Box:Remove(); esps[player].Name:Remove(); esps[player].Tracer:Remove()
+            esps[player].HealthBar:Remove(); esps[player].HealthOutline:Remove()
+            for _, skelLine in pairs(esps[player].SkeletonLines) do skelLine:Remove() end
+        end
+    end
+    table.clear(esps)
+    print("All memory allocations completely released.")
+end)
+
+
+-- --- UNIVERSAL COMPATIBILITY CALCULATION LOGIC ---
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Thickness = 1.2; FOVCircle.NumSides = 64; FOVCircle.Filled = false
+
+local function isVisible(targetPart)
+    if not Settings.VisibleCheck or not targetPart then return true end
+    
+    local origin = Camera.CFrame.Position
+    local direction = (targetPart.Position - origin)
+    
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    
+    local castResult = workspace:Raycast(origin, direction, raycastParams)
+    
+    if castResult and castResult.Instance then
+        if castResult.Instance:IsDescendantOf(targetPart.Parent) then
+            return true
+        else
+            return false
+        end
+    end
+    return true
+end
+
+local function getModelAnchors(character)
+    if not character then return nil, nil end
+    local rootPart = character.PrimaryPart or character:FindFirstChild("HumanoidRootPart")
+    local upperPart = character:FindFirstChild("Head") or character:FindFirstChild("UpperTorso")
+    if not rootPart then rootPart = character:FindFirstChildWhichIsA("BasePart") end
+    if not upperPart then upperPart = rootPart end
+    return rootPart, upperPart
+end
+
+local function getTrackCoordinate(character)
+    local root, upper = getModelAnchors(character)
+    if not root then return nil end
+    
+    local method = Settings.TargetMethod
+    if method == "DynamicScan" then return upper and upper.Position or root.Position
+    elseif method == "ModelCenter" then return character:GetBoundingBox().Position
+    elseif method == "CustomTagName" then
+        local target = character:FindFirstChild(Settings.CustomTargetName)
+        if target and target:IsA("BasePart") then return target.Position end
+        return root.Position
+    end
+    return nil
+end
+
+local function isTargetValid(player, requireVisibility)
+    if not player or player == LocalPlayer then return false end
+    if Settings.TeamCheck and player.Team == LocalPlayer.Team then return false end
+    local character = player.Character
+    if not character then return false end
+    local root = getModelAnchors(character)
+    if not root then return false end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid and humanoid.Health <= 0 then return false end
+    
+    if requireVisibility and not isVisible(root) then return false end
+    
+    return true
+end
+
+local function getClosestTargetToCursor()
+    local closestTargetPos = nil
+    local shortestDistance = Settings.FOV
+    local mousePos = UserInputService:GetMouseLocation()
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if isTargetValid(player, true) then -- Requires visibility for Aimbot
+            local coord = getTrackCoordinate(player.Character)
+            if coord then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(coord)
+                if onScreen then
+                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                    if distance < shortestDistance then
+                        shortestDistance = distance; closestTargetPos = coord
+                    end
+                end
+            end
+        end
+    end
+    return closestTargetPos
+end
+
+-- Inputs Setup
+table.insert(ActiveConnections, UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then 
+        Aiming = true 
+        TriggerbotHolding = true
+    end
+end))
+
+table.insert(ActiveConnections, UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then 
+        Aiming = false 
+        TriggerbotHolding = false
+    end
+end))
+
+-- ESP Overlay Allocation Framework
+local function createESP(player)
+    if esps[player] then return end
+    esps[player] = {
+        Box = Drawing.new("Square"), Name = Drawing.new("Text"), Tracer = Drawing.new("Line"),
+        HealthOutline = Drawing.new("Square"), HealthBar = Drawing.new("Square"),
+        SkeletonLines = {}
+    }
+    
+    -- Pre-allocate 14 lines for skeletons (max needed for R15)
+    for i = 1, 14 do
+        local line = Drawing.new("Line")
+        line.Thickness = 1.5
+        line.Visible = false
+        table.insert(esps[player].SkeletonLines, line)
+    end
+    
+    local data = esps[player]
+    data.Box.Thickness = 1; data.Box.Filled = false
+    data.Name.Color = Color3.fromRGB(255, 255, 255); data.Name.Size = 13; data.Name.Center = true; data.Name.Outline = true
+    data.Tracer.Color = Color3.fromRGB(255, 214, 10); data.Tracer.Thickness = 1
+    data.HealthOutline.Thickness = 1; data.HealthOutline.Filled = true; data.HealthOutline.Color = Color3.fromRGB(0, 0, 0)
+    data.HealthBar.Thickness = 1; data.HealthBar.Filled = true
+end
+
+local function removeESP(player)
+    local data = esps[player]
+    if data then
+        data.Box:Remove(); data.Name:Remove(); data.Tracer:Remove(); data.HealthOutline:Remove(); data.HealthBar:Remove()
+        for _, line in pairs(data.SkeletonLines) do line:Remove() end
+        esps[player] = nil
+    end
+end
+
+table.insert(ActiveConnections, Players.PlayerAdded:Connect(createESP))
+table.insert(ActiveConnections, Players.PlayerRemoving:Connect(removeESP))
+for _, p in ipairs(Players:GetPlayers()) do createESP(p) end
+
+-- --- MAIN REFRESH RENDERING LOOP ---
+table.insert(ActiveConnections, RunService.RenderStepped:Connect(function()
+    local mousePos = UserInputService:GetMouseLocation()
+    local screenSize = Camera.ViewportSize
+    local centerPos = Vector2.new(screenSize.X / 2, screenSize.Y / 2)
+    
+    FOVCircle.Position = mousePos
+    FOVCircle.Radius = Settings.FOV
+    FOVCircle.Color = Settings.FOVColor
+    FOVCircle.Visible = Settings.AimbotEnabled and Settings.ShowFOV
+
+    local crosshairVisible = Settings.ShowCrosshair
+    local crossSize, crossGap = 8, 3
+
+    CrosshairLines.Top.From = Vector2.new(centerPos.X, centerPos.Y - crossGap)
+    CrosshairLines.Top.To = Vector2.new(centerPos.X, centerPos.Y - crossGap - crossSize)
+    CrosshairLines.Top.Color = Settings.CrosshairColor
+    
+    CrosshairLines.Bottom.From = Vector2.new(centerPos.X, centerPos.Y + crossGap)
+    CrosshairLines.Bottom.To = Vector2.new(centerPos.X, centerPos.Y + crossGap + crossSize)
+    CrosshairLines.Bottom.Color = Settings.CrosshairColor
+    
+    CrosshairLines.Left.From = Vector2.new(centerPos.X - crossGap, centerPos.Y)
+    CrosshairLines.Left.To = Vector2.new(centerPos.X - crossGap - crossSize, centerPos.Y)
+    CrosshairLines.Left.Color = Settings.CrosshairColor
+    
+    CrosshairLines.Right.From = Vector2.new(centerPos.X + crossGap, centerPos.Y)
+    CrosshairLines.Right.To = Vector2.new(centerPos.X + crossGap + crossSize, centerPos.Y)
+    CrosshairLines.Right.Color = Settings.CrosshairColor
+
+    for _, line in pairs(CrosshairLines) do line.Visible = crosshairVisible end
+
+    -- [APPLIED] Smooth Aim Logic
+    if Settings.AimbotEnabled and Aiming then
+        local targetWorldPos = getClosestTargetToCursor()
+        if targetWorldPos then
+            local targetScreenPos = Camera:WorldToViewportPoint(targetWorldPos)
+            local snapMove = Vector2.new(targetScreenPos.X, targetScreenPos.Y) - mousePos
+            mousemoverel(snapMove.X / math.max(1, Settings.Smoothing), snapMove.Y / math.max(1, Settings.Smoothing))
+        end
+    end
+
+    -- [APPLIED] Triggerbot Logic
+    if Settings.TriggerbotEnabled and TriggerbotHolding then
+        local centerRay = Camera:ViewportPointToRay(centerPos.X, centerPos.Y)
+        local raycastParams = RaycastParams.new()
+        raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+        raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+        
+        local castResult = workspace:Raycast(centerRay.Origin, centerRay.Direction * 1000, raycastParams)
+        
+        if castResult and castResult.Instance then
+            local hitCharacter = castResult.Instance:FindFirstAncestorOfClass("Model")
+            local hitPlayer = hitCharacter and Players:GetPlayerFromCharacter(hitCharacter)
+            
+            -- Only shoot if they are valid AND visible
+            if hitPlayer and isTargetValid(hitPlayer, true) then
+                mouse1press()
+                task.wait(0.01)
+                mouse1release()
+            end
+        end
+    end
+
+    local boxColor, espEnabled = Settings.BoxColor, Settings.ESPEnabled
+    local showBoxes, showNames = Settings.ShowBoxes, Settings.ShowNames
+    local showTracers, showHealth = Settings.ShowTracers, Settings.ShowHealth
+    local showSkeleton = Settings.ShowSkeleton
+    local skelColor = Settings.SkeletonColor
+
+    for player, visual in pairs(esps) do
+        -- Hide skeletons globally at start of loop to prevent trailing lines
+        for _, line in pairs(visual.SkeletonLines) do line.Visible = false end
+        
+        -- Check base validity. If VisibleCheck is on, we also pass `true` to require visibility
+        if espEnabled and isTargetValid(player, Settings.VisibleCheck) then
+            local root, upper = getModelAnchors(player.Character)
+            local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
+            
+            if onScreen then
+                local upperScreenPos = Camera:WorldToViewportPoint(upper.Position)
+                local sizeY = math.clamp(math.abs(upperScreenPos.Y - screenPos.Y) * 3.5, 10, 400)
+                local sizeX = sizeY / 1.4
+                local boxPosX, boxPosY = screenPos.X - sizeX / 2, screenPos.Y - sizeY / 2
+
+                if showBoxes then
+                    visual.Box.Size = Vector2.new(sizeX, sizeY); visual.Box.Position = Vector2.new(boxPosX, boxPosY)
+                    visual.Box.Color = boxColor; visual.Box.Visible = true
+                else visual.Box.Visible = false end
+
+                if showNames then
+                    visual.Name.Text = player.Name; visual.Name.Position = Vector2.new(screenPos.X, boxPosY - 14)
+                    visual.Name.Visible = true
+                else visual.Name.Visible = false end
+
+                if showTracers then
+                    visual.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                    visual.Tracer.To = Vector2.new(screenPos.X, boxPosY + sizeY); visual.Tracer.Visible = true
+                else visual.Tracer.Visible = false end
+
+                if showHealth then
+                    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                    local health = humanoid and humanoid.Health or 100
+                    local maxHealth = humanoid and humanoid.MaxHealth or 100
+                    local healthPercentage = math.clamp(health / maxHealth, 0, 1)
+                    
+                    local barColor = Color3.fromHSV(healthPercentage * 0.35, 0.9, 0.9)
+                    local barWidth, barPadding = 3, 5
+                    
+                    visual.HealthOutline.Size = Vector2.new(barWidth + 2, sizeY)
+                    visual.HealthOutline.Position = Vector2.new(boxPosX - (barWidth + barPadding + 1), boxPosY)
+                    visual.HealthOutline.Visible = true
+                    
+                    local filledHeight = sizeY * healthPercentage
+                    visual.HealthBar.Size = Vector2.new(barWidth, filledHeight)
+                    visual.HealthBar.Position = Vector2.new(boxPosX - (barWidth + barPadding), boxPosY + (sizeY - filledHeight))
+                    visual.HealthBar.Color = barColor; visual.HealthBar.Visible = true
+                else
+                    visual.HealthOutline.Visible = false; visual.HealthBar.Visible = false
+                end
+                
+                -- Skeleton Logic
+                if showSkeleton then
+                    local char = player.Character
+                    local rigLinks = char:FindFirstChild("UpperTorso") and R15Links or R6Links
+                    
+                    for i, link in ipairs(rigLinks) do
+                        local part1 = char:FindFirstChild(link[1])
+                        local part2 = char:FindFirstChild(link[2])
+                        
+                        if part1 and part2 then
+                            local pos1, vis1 = Camera:WorldToViewportPoint(part1.Position)
+                            local pos2, vis2 = Camera:WorldToViewportPoint(part2.Position)
+                            
+                            if vis1 or vis2 then
+                                visual.SkeletonLines[i].From = Vector2.new(pos1.X, pos1.Y)
+                                visual.SkeletonLines[i].To = Vector2.new(pos2.X, pos2.Y)
+                                visual.SkeletonLines[i].Color = skelColor
+                                visual.SkeletonLines[i].Visible = true
+                            end
+                        end
+                    end
+                end
+
+            else
+                visual.Box.Visible = false; visual.Name.Visible = false; visual.Tracer.Visible = false; visual.HealthOutline.Visible = false; visual.HealthBar.Visible = false
+            end
+        else
+            visual.Box.Visible = false; visual.Name.Visible = false; visual.Tracer.Visible = false; visual.HealthOutline.Visible = false; visual.HealthBar.Visible = false
+        end
+    end
+end))
+
+Library:Notify("Tool Loaded Successfully.", 4)
