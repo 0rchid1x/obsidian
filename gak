@@ -1,0 +1,248 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+
+-- GUI Setup
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "Gakuran_HUD_V5_Mobile"
+screenGui.ResetOnSpawn = false
+if gethui then 
+    screenGui.Parent = gethui() 
+elseif syn and syn.protect_gui then 
+    syn.protect_gui(screenGui)
+    screenGui.Parent = game:GetService("CoreGui")
+else
+    screenGui.Parent = game:GetService("CoreGui")
+end
+
+-- ==========================================
+-- SMART DRAG FUNCTION (DISTINGUISH CLICK FROM DRAG)
+-- ==========================================
+local function makeDraggable(gui, onClickCallback)
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    local hasDragged = false
+
+    gui.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            hasDragged = false
+            dragStart = input.Position
+            startPos = gui.Position
+        end
+    end)
+
+    gui.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            -- Consider it a drag if moved more than 5 pixels
+            if math.abs(delta.X) > 5 or math.abs(delta.Y) > 5 then
+                hasDragged = true
+                gui.Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + delta.X, 
+                    startPos.Y.Scale, startPos.Y.Offset + delta.Y
+                )
+            end
+        end
+    end)
+
+    gui.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+            -- If we didn't drag and just tapped — trigger click
+            if not hasDragged and onClickCallback then
+                onClickCallback()
+            end
+        end
+    end)
+end
+
+-- ==========================================
+-- MOBILE TOGGLE BUTTON
+-- ==========================================
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 50, 0, 50)  -- Slightly larger for mobile touch
+toggleBtn.Position = UDim2.new(0, 15, 0, 15)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(12, 12, 15)
+toggleBtn.BackgroundTransparency = 0.2
+toggleBtn.BorderSizePixel = 0
+toggleBtn.Text = "HUD"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 14  -- Bigger text for mobile
+toggleBtn.Active = true
+toggleBtn.Parent = screenGui
+
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 8)
+
+-- ==========================================
+-- MAIN MENU FRAME
+-- ==========================================
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 220, 0, 80)  -- Slightly larger for mobile readability
+mainFrame.Position = UDim2.new(1, -240, 0, 45)
+mainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 15)
+mainFrame.BackgroundTransparency = 0.2
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Visible = false
+mainFrame.Parent = screenGui
+
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 8)
+
+-- Apply dragging to menu
+makeDraggable(mainFrame, nil)
+
+-- Apply dragging to toggle button with click handler
+makeDraggable(toggleBtn, function()
+    mainFrame.Visible = not mainFrame.Visible
+end)
+
+-- HP Label
+local hpText = Instance.new("TextLabel")
+hpText.Size = UDim2.new(1, -20, 0, 30)
+hpText.Position = UDim2.new(0, 12, 0, 8)
+hpText.BackgroundTransparency = 1
+hpText.TextColor3 = Color3.fromRGB(255, 80, 80)
+hpText.TextSize = 16
+hpText.Font = Enum.Font.GothamBold
+hpText.TextXAlignment = Enum.TextXAlignment.Left
+hpText.Text = "HP: ..."
+hpText.Parent = mainFrame
+
+-- Stamina Label
+local stamText = Instance.new("TextLabel")
+stamText.Size = UDim2.new(1, -20, 0, 30)
+stamText.Position = UDim2.new(0, 12, 0, 40)
+stamText.BackgroundTransparency = 1
+stamText.TextColor3 = Color3.fromRGB(255, 180, 60)
+stamText.TextSize = 16
+stamText.Font = Enum.Font.GothamBold
+stamText.TextXAlignment = Enum.TextXAlignment.Left
+stamText.Text = "STAMINA: ..."
+stamText.Parent = mainFrame
+
+-- ==========================================
+-- HP LOGIC
+-- ==========================================
+local hum = nil
+local hpConn = nil
+
+local function updateHp()
+    if hum then
+        hpText.Text = string.format("HP  %.0f / %.0f", hum.Health, hum.MaxHealth)
+    end
+end
+
+local function setupCharacter(char)
+    hum = char:WaitForChild("Humanoid", 5)
+    if hpConn then hpConn:Disconnect() end
+    if hum then
+        hpConn = hum:GetPropertyChangedSignal("Health"):Connect(updateHp)
+        updateHp()
+    else
+        hpText.Text = "HP: Error"
+    end
+end
+
+if player.Character then setupCharacter(player.Character) end
+player.CharacterAdded:Connect(setupCharacter)
+
+-- ==========================================
+-- GAKURAN STAMINA LOGIC
+-- ==========================================
+local staminaSource = nil
+local sourceType = nil
+local lastStamVal = -1
+
+local function findPhysicalStamina()
+    local char = player.Character
+    if not char then return nil, nil end
+    local stats = char:FindFirstChild("Stats") or char:FindFirstChild("Data") or char:FindFirstChild("Folder")
+    if stats then
+        local stamObj = stats:FindFirstChild("Stamina") or stats:FindFirstChild("stamina") or stats:FindFirstChild("Energy")
+        if stamObj and stamObj:IsA("ValueObject") then return stamObj, "Value" end
+    end
+    local directStam = char:FindFirstChild("Stamina") or char:FindFirstChild("stamina")
+    if directStam and directStam:IsA("ValueObject") then return directStam, "Value" end
+    if char:GetAttribute("Stamina") ~= nil then return "CharAttribute", "Attribute"
+    elseif player:GetAttribute("Stamina") ~= nil then return "PlayerAttribute", "Attribute" end
+    return nil, nil
+end
+
+local function findGCRelatedStamina()
+    if not getgc then return nil, nil end
+    local gctables = getgc()
+    for _, v in pairs(gctables) do
+        if type(v) == "table" then
+            local hasStam = rawget(v, "Stamina") or rawget(v, "stamina") or rawget(v, "_stamina")
+            if hasStam and type(hasStam) == "number" then
+                local isCombatTable = rawget(v, "Posture") or rawget(v, "MaxStamina") or rawget(v, "Blocking") or rawget(v, "Stunned") or rawget(v, "MaxStam")
+                if isCombatTable then return v, "Table" end
+            end
+        end
+    end
+    return nil, nil
+end
+
+local function resolveStaminaSource()
+    local src, t = findPhysicalStamina()
+    if src then staminaSource = src; sourceType = t; return end
+    src, t = findGCRelatedStamina()
+    if src then staminaSource = src; sourceType = t; return end
+    staminaSource = nil; sourceType = nil
+end
+
+player.CharacterRemoving:Connect(function()
+    staminaSource = nil; sourceType = nil; lastStamVal = -1
+end)
+
+task.spawn(function()
+    local scanCooldown = 0
+    while task.wait(0.05) do
+        if not staminaSource then
+            if tick() - scanCooldown > 3 then
+                scanCooldown = tick()
+                resolveStaminaSource()
+            end
+            if mainFrame.Visible then
+                stamText.Text = "STAMINA: Searching..."
+            end
+            continue
+        end
+
+        if not mainFrame.Visible then continue end
+
+        local currentStam = nil
+        local success = pcall(function()
+            if sourceType == "Value" then currentStam = staminaSource.Value
+            elseif sourceType == "Attribute" then
+                local char = player.Character
+                if staminaSource == "CharAttribute" and char then currentStam = char:GetAttribute("Stamina")
+                else currentStam = player:GetAttribute("Stamina") end
+            elseif sourceType == "Table" then
+                currentStam = rawget(staminaSource, "Stamina") or rawget(staminaSource, "stamina") or rawget(staminaSource, "_stamina")
+            end
+        end)
+
+        if not success or currentStam == nil then
+            staminaSource = nil; sourceType = nil
+            continue
+        end
+
+        if currentStam ~= lastStamVal then
+            lastStamVal = currentStam
+            stamText.Text = string.format("STAMINA  %.0f", currentStam)
+            if currentStam < 30 then stamText.TextColor3 = Color3.fromRGB(255, 100, 100)
+            else stamText.TextColor3 = Color3.fromRGB(255, 180, 60) end
+        end
+    end
+end)
+
+-- INSERT keybind (PC)
+UserInputService.InputBegan:Connect(function(input, gp)
+    if not gp and input.KeyCode == Enum.KeyCode.Insert then
+        mainFrame.Visible = not mainFrame.Visible
+    end
+end)
