@@ -36,89 +36,64 @@ local Tabs = {
 local Scripts = {
 
     Universal = {
-
         {
             Name = "Infinite Yield",
             Description = "Admin command script",
-
             Load = function()
                 loadstring(game:HttpGet(
                     "https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"
                 ))()
             end
         },
-
-
         {
             Name = "Obsidian Universal",
             Description = "Universal aimbot/esp",
-
             Load = function()
                 loadstring(game:HttpGet(
                     "https://raw.githubusercontent.com/0rchid1x/obsidian/refs/heads/main/main"
                 ))()
             end
         },
-
     },
 
-
     Games = {
-
         [122446657157717] = { -- Sniper Arena
-
             {
                 Name = "sniper arena script",
                 Description = "skin changer /w esp",
-
                 Load = function()
-                loadstring(game:HttpGet(
-                    "https://rscripts.net/raw/skin-changer-open-source_1781915664324_pDi68Fs444.txt"
-                ))()
-            end
+                    loadstring(game:HttpGet(
+                        "https://rscripts.net/raw/skin-changer-open-source_1781915664324_pDi68Fs444.txt"
+                    ))()
+                end
             }
-
         },
 
-
         [301549746] = { -- counterblox
-
             {
                 Name = "counterblox script",
                 Description = "skinchanger",
-
-               Load = function()
-                loadstring(game:HttpGet(
-                    "https://raw.githubusercontent.com/MMoonDzn/AuroraChanger/refs/heads/main/loader.lua"
-                ))()
-            end
+                Load = function()
+                    loadstring(game:HttpGet(
+                        "https://raw.githubusercontent.com/MMoonDzn/AuroraChanger/refs/heads/main/loader.lua"
+                    ))()
+                end
             }
+        }, -- Added a comma here to separate the games
 
-        }
-
-    }
-
-}
-
-[128736949265057] = { -- gakuran
-
+        [128736949265057] = { -- gakuran
             {
                 Name = "gakuran script",
                 Description = "health/stamina display",
-
-               Load = function()
-                loadstring(game:HttpGet(
-                    "https://raw.githubusercontent.com/0rchid1x/obsidian/refs/heads/main/gak"
-                ))()
-            end
+                Load = function()
+                    loadstring(game:HttpGet(
+                        "https://raw.githubusercontent.com/0rchid1x/obsidian/refs/heads/main/gak"
+                    ))()
+                end
             }
-
         }
-
     }
-
 }
-
 
 
 --// Home
