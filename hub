@@ -100,6 +100,25 @@ local Scripts = {
 
 }
 
+[128736949265057] = { -- gakuran
+
+            {
+                Name = "gakuran script",
+                Description = "health/stamina display",
+
+               Load = function()
+                loadstring(game:HttpGet(
+                    "https://raw.githubusercontent.com/0rchid1x/obsidian/refs/heads/main/gak"
+                ))()
+            end
+            }
+
+        }
+
+    }
+
+}
+
 
 
 --// Home
